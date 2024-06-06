@@ -1,0 +1,106 @@
+//q7
+
+import os
+
+def findfiles(directory):
+    file_paths = []
+
+    # Walk through the directory tree recursively
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            file_paths.append(os.path.join(root, file))
+
+    return file_paths
+
+# Example usage:
+directory = '/path/to/your/directory'
+files = findfiles(directory)
+for file in files:
+    print(file)
+
+
+
+//q8
+
+N = 50
+multiples_of_five = list(filter(lambda x: x % 5 == 0, range(1, N+1)))
+print(multiples_of_five)
+
+
+//q9
+# Example data
+students = ['Alice', 'Bob', 'Charlie']
+subjects = ['Math', 'Science', 'History']
+marks = [85, 92, 78]
+
+# Using map, zip, and max
+max_marks = list(map(max, zip(students, subjects, marks)))
+
+print("Element-wise maximum:", max_marks)
+
+
+
+//q10
+# Define a function to check if a number is odd
+def is_odd(n):
+    return n % 2 != 0
+
+# Define a function to compute the square of a number
+def square(n):
+    return n * n
+
+# Define the range of numbers you want to work with
+numbers = range(1, 11)
+
+# Use filter to select odd numbers, map to compute their squares, and list to convert the result to a list
+odd_squares = list(map(square, filter(is_odd, numbers)))
+
+print("Odd squares:", odd_squares)
+
+
+
+//q11
+# Define a function to check if a triple is a Pythagorean triple
+def is_pythagorean_triple(triple):
+    a, b, c = triple
+    return a**2 + b**2 == c**2
+
+# Generate all possible triples with short sides smaller than 10 using list comprehension
+triples = [(a, b, c) for a in range(1, 10) for b in range(a, 10) for c in range(b, 10)]
+
+# Use filter to select only the Pythagorean triples
+pythagorean_triples = list(filter(is_pythagorean_triple, triples))
+
+print("Pythagorean triples with short sides smaller than 10:")
+print(pythagorean_triples)
+
+
+//q12
+import string
+
+# Enumerate lowercase ASCII letters starting from 1
+lowercase_letters = [(i+1, letter) for i, letter in enumerate(string.ascii_lowercase)]
+
+# Print the enumerated sequence
+for index, letter in lowercase_letters:
+    print(f"{index}: {letter}")
+
+
+//q13
+def geometric_progression(a, q, n):
+    term = a
+    for _ in range(n):
+        yield term
+        term *= q
+
+# Example usage:
+a = 2  # first term
+q = 3  # common ratio
+n = 4  # number of terms
+
+# Generate terms of the geometric progression
+progression_terms = geometric_progression(a, q, n)
+
+# Print the terms
+for term in progression_terms:
+    print(term)

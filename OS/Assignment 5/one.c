@@ -2,97 +2,122 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
-#include <sys/shm.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 
-#define SHM_SIZE 1024  // Size of the shared memory segment
+#define SHM_SIZE 4096
+#define NUM_INTS 100
 
-typedef struct {
-    int numbers[100];
+// Structure to hold result data
+struct Result {
     int max;
     int min;
-    float avg;
-} SharedData;
+    double average;
+};
 
 int main() {
-    int shm_id;
-    SharedData *shared_data;
-
-    // Create a shared memory segment
-    shm_id = shmget(IPC_PRIVATE, sizeof(SharedData), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
-    if (shm_id == -1) {
-        perror("shmget failed");
+    const char *name = "/my_shared_memory";
+    int shm_fd;
+    void *ptr;
+    pid_t pid;
+    
+    // Create the shared memory object
+    shm_fd = shm_open(name, O_CREAT | O_RDWR, 0666);
+    if (shm_fd == -1) {
+        perror("shm_open");
         exit(EXIT_FAILURE);
     }
 
-    // Attach the shared memory segment
-    shared_data = (SharedData *)shmat(shm_id, NULL, 0);
-    if (shared_data == (void *)-1) {
-        perror("shmat failed");
+    // Set the size of the shared memory object
+    if (ftruncate(shm_fd, SHM_SIZE) == -1) {
+        perror("ftruncate");
         exit(EXIT_FAILURE);
     }
 
-    // Parent process
-    pid_t pid = fork();
+    // Map the shared memory object into the address space
+    ptr = mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    if (ptr == MAP_FAILED) {
+        perror("mmap");
+        exit(EXIT_FAILURE);
+    }
+    
+    // Fork the process
+    pid = fork();
 
     if (pid < 0) {
-        perror("fork failed");
+        perror("fork");
         exit(EXIT_FAILURE);
     }
 
-    if (pid == 0) {
-        // Child process
-
-        // Wait for parent to write data
-        while (shared_data->numbers[0] == 0) {
-            usleep(100); // Sleep for 100 microseconds
-        }
+    if (pid == 0) { // Child process
+        int *data = (int *)ptr;
+        int i;
+        int sum = 0;
+        struct Result result;
 
         // Compute maximum, minimum, and average
-        int sum = 0;
-        shared_data->max = shared_data->min = shared_data->numbers[0];
-        for (int i = 0; i < 100; i++) {
-            sum += shared_data->numbers[i];
-            if (shared_data->numbers[i] > shared_data->max) {
-                shared_data->max = shared_data->numbers[i];
+        result.max = data[0];
+        result.min = data[0];
+        for (i = 0; i < NUM_INTS; i++) {
+            sum += data[i];
+            if (data[i] > result.max) {
+                result.max = data[i];
             }
-            if (shared_data->numbers[i] < shared_data->min) {
-                shared_data->min = shared_data->numbers[i];
+            if (data[i] < result.min) {
+                result.min = data[i];
             }
         }
-        shared_data->avg = (float)sum / 100;
+        result.average = (double)sum / NUM_INTS;
 
-        // Detach the shared memory segment
-        if (shmdt(shared_data) == -1) {
-            perror("shmdt failed");
+        // Write result into shared memory
+        // *((struct Result *)ptr) = result;
+        memcpy(ptr, &result, sizeof(struct Result));
+
+        // Unmap the shared memory segment
+        if (munmap(ptr, SHM_SIZE) == -1) {
+            perror("munmap");
             exit(EXIT_FAILURE);
         }
 
+        // Exit child process
         exit(EXIT_SUCCESS);
-    } else {
-        // Parent process
+    } else { // Parent process
+        int *data = (int *)ptr;
+        int i;
 
-        // Generate 100 random integers and write to shared memory
-        srand(time(NULL));
-        for (int i = 0; i < 100; i++) {
-            shared_data->numbers[i] = rand() % 1000; // Random numbers between 0 and 999
+        // Generate and write random integers into shared memory
+        srand((unsigned int) getpid());
+        for (i = 0; i < NUM_INTS; i++) {
+            data[i] = rand() % 100; // Generate random integer between 0 and 99
         }
 
-        // Wait for child to finish computing
+        // Wait for child process to finish
         wait(NULL);
 
-        // Read results from shared memory and display
-        printf("Maximum: %d\n", shared_data->max);
-        printf("Minimum: %d\n", shared_data->min);
-        printf("Average: %.2f\n", shared_data->avg);
+        // Read result from shared memory
+        struct Result result = *((struct Result *)ptr);
 
-        // Detach and remove the shared memory segment
-        if (shmdt(shared_data) == -1) {
-            perror("shmdt failed");
+        // Display result
+        printf("Maximum: %d\n", result.max);
+        printf("Minimum: %d\n", result.min);
+        printf("Average: %.2f\n", result.average);
+
+        // Unmap the shared memory segment
+        if (munmap(ptr, SHM_SIZE) == -1) {
+            perror("munmap");
             exit(EXIT_FAILURE);
         }
-        if (shmctl(shm_id, IPC_RMID, NULL) == -1) {
-            perror("shmctl failed");
+
+        // Close the shared memory object
+        if (close(shm_fd) == -1) {
+            perror("close");
+            exit(EXIT_FAILURE);
+        }
+
+        // Remove the shared memory object
+        if (shm_unlink(name) == -1) {
+            perror("shm_unlink");
             exit(EXIT_FAILURE);
         }
     }

@@ -1,0 +1,2 @@
+Hello, wld!
+This is an effient way to write to a file.

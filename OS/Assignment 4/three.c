@@ -5,15 +5,14 @@
 
 #define BUFFER_SIZE 100
 
-// Function to check if a string is a palindrome
 int is_palindrome(const char *str) {
     int len = strlen(str);
     for (int i = 0; i < len / 2; i++) {
         if (str[i] != str[len - i - 1]) {
-            return 0; // Not a palindrome
+            return 0; 
         }
     }
-    return 1; // Palindrome
+    return 1; 
 }
 
 int main() {
@@ -30,7 +29,6 @@ int main() {
     pid_t pid = fork();
 
     if (pid < 0) {
-        // Fork failed
         perror("fork failed");
         exit(EXIT_FAILURE);
     }
@@ -59,13 +57,11 @@ int main() {
 
             // Check if the string is a palindrome
             if (is_palindrome(buffer)) {
-                // Send "YES" to parent
                 if (write(child_to_parent[1], "YES", strlen("YES") + 1) == -1) {
                     perror("write failed");
                     exit(EXIT_FAILURE);
                 }
             } else {
-                // Send "NO" to parent
                 if (write(child_to_parent[1], "NO", strlen("NO") + 1) == -1) {
                     perror("write failed");
                     exit(EXIT_FAILURE);
@@ -78,7 +74,6 @@ int main() {
         close(child_to_parent[1]); // Close write end of pipe to parent
 
         while (1) {
-            // Read string from user
             printf("Enter a string: ");
             fgets(buffer, BUFFER_SIZE, stdin);
             buffer[strcspn(buffer, "\n")] = '\0'; // Remove trailing newline
@@ -95,7 +90,6 @@ int main() {
                 exit(EXIT_FAILURE);
             }
 
-            // Check if the response is "quit"
             if (strcmp(buffer, "quit") == 0) {
                 break; // Exit loop if child sent "quit"
             }

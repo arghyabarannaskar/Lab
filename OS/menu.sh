@@ -7,7 +7,7 @@ choose_directory() {
     echo "2) Assignment 2"
     echo "3) Assignment 3"
     echo "4) Quit"
-    read -p "Enter your choice: " choice
+    read -p "\nEnter your choice: " choice
 
     case $choice in
       1) DIRECTORY="Assignment 1";;
@@ -17,28 +17,31 @@ choose_directory() {
       *) echo "Invalid option. Try again." ; continue ;;
     esac
 
-    cd "$ROOT_DIR/$DIRECTORY" || { echo "Failed to change directory"; exit 1; }
+    cd "$ROOT_DIR/$DIRECTORY" || { echo "\nFailed to change directory"; exit 1; }
     list_scripts
   done
 }
 
 list_scripts() {
   while true; do
-    echo "Scripts in $DIRECTORY:"
-    ls *.sh
-    echo "Enter the name of the script to run (type 'back' to change directory):"
+    echo "\nScripts in $DIRECTORY:"
+    ls 
+    echo "\nEnter the name of the script to run (type 'back' to change directory):"
     read -p "Script name: " script
 
     if [ "$script" == "back" ]; then
       cd "$ROOT_DIR"
       return
+    elif [ "$DIRECTORY" == "Assignment 3" ] && [ "$script" == "one.sh" ]; then
+       echo "Enter filename: "
+       read filename
+       ./one.sh $filename
     elif [ -f "$script" ]; then
       chmod +x "$script"
-      echo "Running $script..."
+      echo "\nRunning $script..."
       ./"$script"
-      echo "Done."
     else
-      echo "Script not found. Try again."
+      echo "\nScript not found. Try again."
     fi
   done
 }

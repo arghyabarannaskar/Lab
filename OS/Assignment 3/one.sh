@@ -1,5 +1,6 @@
 if [ $# -eq 0 ]
 then
+  echo "\nScript not being run correctly..."
   echo "Usage: $0 filename"
   exit 1
 fi

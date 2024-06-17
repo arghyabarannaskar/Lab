@@ -1,0 +1,6 @@
+echo "Home Directory: $HOME"
+echo "Operating System Type: $(uname -o)"
+echo "Operating System Version: $(uname -v)"
+echo "OS Release Number: $(uname -r)"
+echo "Kernel Version: $(uname -s)"
+echo "Current Path Directory: $PATH"

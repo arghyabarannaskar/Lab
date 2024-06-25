@@ -1,102 +1,87 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<unistd.h>
-#include<sys/types.h>
-#include<sys/ipc.h>
-#include<sys/sem.h>
-#include<sys/wait.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <semaphore.h>
+#include <fcntl.h> // For O_CREAT, O_EXCL
 
-
-struct sembuf P= {0, -1, 0}; //P operation
-struct sembuf V = {0, 1, 0}; //V operation
-
-void P1(int sem_A, int sem_B){
-    int val_A;
-    for(int i = 0; i<20; i++){
-        semop(sem_A, &P, 1);
-        
+void P1(sem_t *sem_A, sem_t *sem_B) {
+    for (int i = 0; i < 20; i++) {
+        sem_wait(sem_A);
         printf("A");
-        
         fflush(stdout);
-
-        semop(sem_B, &V, 1);
+        sem_post(sem_B);
     }
 }
 
-void P2(int sem_B, int sem_C, int sem_A){
+void P2(sem_t *sem_B, sem_t *sem_C, sem_t *sem_A) {
     int turn = 0;
-    for(int i = 0; i<20; i++){
-        semop(sem_B, &P, 1);
-    
-       printf("B");
-       if((i & 1)) printf(" ");
-        
+    for (int i = 0; i < 20; i++) {
+        sem_wait(sem_B);
+        printf("B");
+        if ((i & 1)) printf(" ");
         fflush(stdout);
-        if(turn == 0){
-            semop(sem_C, &V, 1);
+        if (turn == 0) {
+            sem_post(sem_C);
             turn++;
-        }else{
-            semop(sem_A, &V, 1);
+        } else {
+            sem_post(sem_A);
             turn = 0;
         }
     }
 }
 
-
-void P3(int sem_C, int sem_A){
+void P3(sem_t *sem_C, sem_t *sem_A) {
     int turn = 0;
-    for(int i = 0; i<20; i++){
-        semop(sem_C, &P, 1);
-       
+    for (int i = 0; i < 20; i++) {
+        sem_wait(sem_C);
         printf("C");
-        
         fflush(stdout);
-        if(turn == 0){
-            semop(sem_C, &V, 1);
+        if (turn == 0) {
+            sem_post(sem_C);
             turn = 1;
-        }else{
-            semop(sem_A, &V, 1);
+        } else {
+            sem_post(sem_A);
             turn = 0;
         }
     }
 }
 
+int main() {
+    sem_t *sem_A = sem_open("/semA", O_CREAT | O_EXCL, 0666, 1);
+    sem_t *sem_B = sem_open("/semB", O_CREAT | O_EXCL, 0666, 0);
+    sem_t *sem_C = sem_open("/semC", O_CREAT | O_EXCL, 0666, 0);
 
-int main(){
-    key_t key = ftok("semfile", 65); //Generating a unique key
+    if (sem_A == SEM_FAILED || sem_B == SEM_FAILED || sem_C == SEM_FAILED) {
+        perror("sem_open");
+        exit(EXIT_FAILURE);
+    }
 
-    int sem_A = semget(key, 1, 0666 | IPC_CREAT);
-    int sem_B = semget(key+1, 1, 0666 | IPC_CREAT);
-    int sem_C = semget(key+2, 1, 0666 | IPC_CREAT);
-
-    semctl(sem_A, 0, SETVAL, 1);
-    semctl(sem_B, 0, SETVAL, 0);
-    semctl(sem_C, 0, SETVAL, 0);
-
-    if(fork() == 0){
+    if (fork() == 0) {
         P1(sem_A, sem_B);
         exit(0);
     }
 
-    if(fork() == 0){
+    if (fork() == 0) {
         P2(sem_B, sem_C, sem_A);
         exit(0);
     }
 
-    if(fork() == 0){
+    if (fork() == 0) {
         P3(sem_C, sem_A);
         exit(0);
     }
 
-    for(int i = 0; i<3; i++){
+    for (int i = 0; i < 3; i++) {
         wait(NULL);
     }
 
     printf("\n");
 
-    semctl(sem_A, 0, IPC_RMID, 0);
-    semctl(sem_B, 0, IPC_RMID, 0);
-    semctl(sem_C, 0, IPC_RMID, 0);
+    sem_unlink("/semA");
+    sem_unlink("/semB");
+    sem_unlink("/semC");
 
     return 0;
 }

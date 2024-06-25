@@ -1,125 +1,134 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/wait.h>
-#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <fcntl.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <sys/wait.h>
 
-#define SHM_SIZE 4096
-#define NUM_INTS 100
+#include <sys/ipc.h>
+#include <sys/sem.h>
 
-// Structure to hold result data
-struct Result {
+#define NUM_VALUES 10
+
+typedef struct {
     int max;
     int min;
-    double average;
-};
+    double avg;
+} Result;
+
+struct sembuf P = {0, -1, 0}; // P operation wait
+struct sembuf V = {0, 1, 0};  // V operation siganl
+
+void generateRandomNumbers(double* numbers) {
+    srand(time(NULL));
+    for (int i = 0; i < NUM_VALUES; i++) {
+        numbers[i] = rand() % 1000;
+    }
+}
 
 int main() {
-    const char *name = "/my_shared_memory";
-    int shm_fd;
-    void *ptr;
-    pid_t pid;
-    
-    // Create the shared memory object
-    shm_fd = shm_open(name, O_CREAT | O_RDWR, 0666);
-    if (shm_fd == -1) {
-        perror("shm_open");
-        exit(EXIT_FAILURE);
-    }
+    const int SIZE = (NUM_VALUES+5)*sizeof(double);
+    pid_t childPid;
+    Result* result;
 
-    // Set the size of the shared memory object
-    if (ftruncate(shm_fd, SHM_SIZE) == -1) {
-        perror("ftruncate");
-        exit(EXIT_FAILURE);
-    }
+    //creating semaphore
+    key_t key = ftok("semfile", 65); 
+    int sem_A = semget(key, 1, 0666 | IPC_CREAT);
 
-    // Map the shared memory object into the address space
-    ptr = mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
-    if (ptr == MAP_FAILED) {
-        perror("mmap");
-        exit(EXIT_FAILURE);
-    }
-    
-    // Fork the process
-    pid = fork();
+    semctl(sem_A, 0, SETVAL, 0); 
 
-    if (pid < 0) {
+    // Create child process
+    childPid = fork();
+
+    if (childPid < 0) {
         perror("fork");
-        exit(EXIT_FAILURE);
-    }
+        exit(1);
+    } else if (childPid == 0) {
+        // Child process
 
-    if (pid == 0) { // Child process
-        int *data = (int *)ptr;
-        int i;
-        int sum = 0;
-        struct Result result;
+        // usleep(1000);
 
-        // Compute maximum, minimum, and average
-        result.max = data[0];
-        result.min = data[0];
-        for (i = 0; i < NUM_INTS; i++) {
-            sum += data[i];
-            if (data[i] > result.max) {
-                result.max = data[i];
+        semop(sem_A, &P, 1);
+
+        const char *name = "q2_shm";
+
+        int shm_fd;
+        double *ptr;
+
+        shm_fd = shm_open(name, O_RDWR, 0666);
+        // ftruncate(shm_fd, SIZE);
+
+
+        ptr = (double *)mmap(0, SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, shm_fd, 0);
+
+
+        double max = ptr[0];
+        double min = ptr[0];
+        // printf("\nmax%.2f\n", max);
+        // printf("\nmin %.2f\n", min);
+        double s = 0;
+        for(int i=0;i<NUM_VALUES;i++){
+            // printf("%d ", ptr[i]);
+            if(ptr[i]>max){
+                // printf("\ngreater %.2f\n", ptr[i]);
+                max = ptr[i];
             }
-            if (data[i] < result.min) {
-                result.min = data[i];
+            if(ptr[i]<min){
+                // printf("\nsmaller %.2f\n", ptr[i]);
+                min = ptr[i];
             }
+            s += ptr[i];
         }
-        result.average = (double)sum / NUM_INTS;
+        ptr[NUM_VALUES] = max;
+        ptr[NUM_VALUES+1] = min;
+        ptr[NUM_VALUES+2] = s/NUM_VALUES;
+        // semop(sem_A, &V, 1);
 
-        // Write result into shared memory
-        // *((struct Result *)ptr) = result;
-        memcpy(ptr, &result, sizeof(struct Result));
+        semctl(sem_A, 0, IPC_RMID, 0);
 
-        // Unmap the shared memory segment
-        if (munmap(ptr, SHM_SIZE) == -1) {
-            perror("munmap");
-            exit(EXIT_FAILURE);
+        exit(0);
+    } else {
+        // Parent process
+        const char *name = "q2_shm";
+
+        int shm_fd;
+        double *ptr;
+
+        shm_fd = shm_open(name, O_CREAT|O_RDWR, 0666);
+        ftruncate(shm_fd, SIZE);
+
+
+        ptr = (double *)mmap(0, SIZE, PROT_WRITE, MAP_SHARED, shm_fd, 0);
+
+        // Generate random numbers
+        double numbers[NUM_VALUES];
+        generateRandomNumbers(numbers);
+
+        for(int i = 0; i < NUM_VALUES; i++){
+            printf("%.1f ", numbers[i]);
         }
-
-        // Exit child process
-        exit(EXIT_SUCCESS);
-    } else { // Parent process
-        int *data = (int *)ptr;
-        int i;
-
-        // Generate and write random integers into shared memory
-        srand((unsigned int) getpid());
-        for (i = 0; i < NUM_INTS; i++) {
-            data[i] = rand() % 100; // Generate random integer between 0 and 99
+        // Write numbers into shared memory
+        for (int i = 0; i < NUM_VALUES; i++) {
+            // sharedMemory[i] = numbers[i];
+            ptr[i] = numbers[i];
         }
+        printf("\n");
+        semop(sem_A, &V, 1);
 
-        // Wait for child process to finish
+        // Wait for the child to finish computation
         wait(NULL);
 
-        // Read result from shared memory
-        struct Result result = *((struct Result *)ptr);
+        printf("Maximum: %.2f\n", ptr[NUM_VALUES]);
+        printf("Minimum: %.2f\n", ptr[NUM_VALUES+1]);
+        printf("Average: %.2f\n", ptr[NUM_VALUES+2]);
 
-        // Display result
-        printf("Maximum: %d\n", result.max);
-        printf("Minimum: %d\n", result.min);
-        printf("Average: %.2f\n", result.average);
-
-        // Unmap the shared memory segment
-        if (munmap(ptr, SHM_SIZE) == -1) {
-            perror("munmap");
-            exit(EXIT_FAILURE);
-        }
-
-        // Close the shared memory object
-        if (close(shm_fd) == -1) {
-            perror("close");
-            exit(EXIT_FAILURE);
-        }
-
-        // Remove the shared memory object
-        if (shm_unlink(name) == -1) {
-            perror("shm_unlink");
-            exit(EXIT_FAILURE);
-        }
+        semctl(sem_A, 0, IPC_RMID, 0);
     }
 
     return 0;

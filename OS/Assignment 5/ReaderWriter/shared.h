@@ -5,7 +5,7 @@
 #include <semaphore.h>
 
 #define SHM_NAME "/rw_shared_memory"
-#define BUFFER_SIZE 100
+#define BUFFER_SIZE 4
 
 typedef struct {
     int data[BUFFER_SIZE];
